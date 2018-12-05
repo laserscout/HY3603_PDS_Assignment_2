@@ -109,7 +109,6 @@ void validation(float median,int partLength,int size,float *numberPart,int proce
     int sumMax,sumMin,sumEq,i;
     for(i=0;i<partLength;i++)
     {
-      printf("%.2f, ",numberPart[i]);
       if(numberPart[i]>median)
             countMax++;
         else if(numberPart[i]<median)
@@ -122,7 +121,6 @@ void validation(float median,int partLength,int size,float *numberPart,int proce
     MPI_Reduce(&countEq,&sumEq,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
     if(processId==0)
     {
-      printf("\n");
         if((sumMax<=size/2)&&(sumMin<=size/2))  //Checks if both the lower and higher values occupy less than 50% of the total array.
             printf("VALIDATION PASSED!\n");
         else
@@ -152,7 +150,8 @@ void validationST(float median, int size, float *numberPart)
         else
             countEq++;
     }
-    if((countMax<=size/2)&&(countMin<=size/2))  //Checks if both the lower and higher values occupy less than 50% of the total array.
+    if((countMax<=size/2)&&(countMin<=size/2))  //Checks if both the lower and higher values occupy
+						//less than 50% of the total array.
         printf("VALIDATION PASSED!\n");
     else
         printf("VALIDATION FAILED!\n");
@@ -247,17 +246,9 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
                 int useit=0;
                 randomCounter2++;
                 MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD);
-                MPI_Gather(&useNewPivot, 1, MPI_INT, pivotArray, 1, MPI_INT, 0, MPI_COMM_WORLD); //Gather
-												 //every
-												 //value
-												 //and
-												 //chose
-												 //a
-												 //node
-												 //to
-												 //change
-												 //the
-												 //pivot.
+                MPI_Gather(&useNewPivot, 1, MPI_INT, pivotArray, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		//Gather every value and chose a node to change the pivot.
+		
                 for(i=0;i<activeSize;i++)
                 {
                     if(pivotArray[i]==1)
@@ -296,7 +287,8 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
                 randomCounter=0; //Fail safe
             randomNode=activeNodes[randomCounter];
             randomCounter++;			//Increase the counter
-            MPI_Bcast(&randomNode,1,MPI_INT,0,MPI_COMM_WORLD);   //FIRST BROADCAST : SENDING randomnode, who will chose
+            MPI_Bcast(&randomNode,1,MPI_INT,0,MPI_COMM_WORLD);   //FIRST BROADCAST : SENDING
+								 //randomnode, who will chose
         }
         if(randomNode==processId)  //If i am to choose the pivot.....
 	    {
@@ -304,11 +296,13 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             {
                 srand(time(NULL));
                 pivot=arrayToUse[rand() % elements];
-                MPI_Bcast(&pivot,1,MPI_FLOAT,0,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING PIVOT   k ton stelnw sto lao
+                MPI_Bcast(&pivot,1,MPI_FLOAT,0,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING PIVOT k
+								//ton stelnw sto lao
 	        }
             else
             {
-                MPI_Bcast(&tempPivot,1,MPI_FLOAT,0,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING PIVOT   k ton stelnw sto lao
+                MPI_Bcast(&tempPivot,1,MPI_FLOAT,0,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING
+								    //PIVOT k ton stelnw sto lao
                 pivot=tempPivot;
             }
         }
@@ -316,10 +310,10 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             MPI_Bcast(&pivot,1,MPI_FLOAT,randomNode,MPI_COMM_WORLD);  // SECOND BROADCAST : RECEIVING PIVOT
         if(stillActive==1)  //If i still have values in my array.. proceed
         {
-            partition(arrayToUse,elements,pivot,&arraySmall,&arrayBig,&endSmall,&endBig);  //I partition my array  // endsmall=number of elements in small array, it may be 0
-            // endbig=number of elements in big array, it may be 0
-            //arraysmall = Points to the position of the small array.NULL if the array is empty
-            //Same for arraybig
+            partition(arrayToUse,elements,pivot,&arraySmall,&arrayBig,&endSmall,&endBig); //I partition my array
+	    //endsmall=number of elements in small array, it may be 0 endbig=number of elements in
+	    //big array, it may be 0 arraysmall = Points to the position of the small array.NULL if
+	    //the array is empty Same for arraybig
         }
         else  //If i'm not active endBig/endSmall has zero value.
         {
@@ -328,7 +322,8 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
         }
         sumSets=0;
 	    //We add the bigSet Values to decide if we keep the small or the big array
-	MPI_Reduce(&endBig,&sumSets,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);  //FIRST REDUCE : SUM OF BIG
+	MPI_Reduce(&endBig,&sumSets,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);  //FIRST REDUCE : SUM OF
+									  //BIG
         MPI_Bcast(&sumSets,1,MPI_INT,0,MPI_COMM_WORLD);
         if(oldSumSets==sumSets)
             checkIdentical=1;
@@ -337,12 +332,15 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             oldSumSets=sumSets;
             checkIdentical=0;
         }
-	    //hmetabliti keepBigSet 0 h 1 einai boolean k me autin enimerwnw ton lao ti na kratisei to bigset h to smallset
+	    //hmetabliti keepBigSet 0 h 1 einai boolean k me autin enimerwnw ton lao ti na kratisei
+	    //to bigset h to smallset
 	    if(sumSets>k)   //an to sumofbigsets > k tote krataw to big SET
 	    {
             keepBigSet=1; //to dilwnw auto gt meta tha to steilw se olous
             if(endBig==0)
-                dropoutFlag=1; //wraia.. edw an dw oti to bigset mou einai 0.. alla prepei na kratisw to bigset sikwnw auti ti simaia pou simainei tha ginw inactive ligo pio katw tha to deis
+                dropoutFlag=1; //wraia.. edw an dw oti to bigset mou einai 0.. alla prepei na
+			       //kratisw to bigset sikwnw auti ti simaia pou simainei tha ginw
+			       //inactive ligo pio katw tha to deis
             else
             {
                 arrayToUse=arrayBig; //thetw ton neo pinaka na einai o big
@@ -405,7 +403,9 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
         {
             if(activeNodes[i]!=0)
             {
-                MPI_Recv(&flag,1,MPI_INT,activeNodes[i],1,MPI_COMM_WORLD,&Stat);  //FIRST RECEIVE : RECEIVE active or not
+                MPI_Recv(&flag,1,MPI_INT,activeNodes[i],1,MPI_COMM_WORLD,&Stat);  //FIRST RECEIVE :
+										  //RECEIVE active
+										  //or not
                 if(flag==1)
                     removeElement(activeNodes, &activeSize, activeNodes[i]);
             }
@@ -414,7 +414,8 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
 }
 
 /***Executed only by Slave nodes!!*****/
-void slavePart(int processId,int partLength, float *numberPart,int size)  //code here is for the cheap slaves :P
+void slavePart(int processId,int partLength, float *numberPart,int size)  //code here is for the
+									  //cheap slaves :P
 {
     int dropoutflag,elements,i,sumSets,finalize,keepBigSet,randomNode;
     float pivot, tempPivot;
