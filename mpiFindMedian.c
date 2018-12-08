@@ -32,8 +32,9 @@ SOFTWARE.
 #include <stdlib.h>
 #include <mpi.h>
 #include <math.h>
-#include  <time.h>
+#include <time.h>
 #include <sys/time.h>
+#include <assert.h>
 
 MPI_Status Stat;
 void partition (float *array, int elements, float pivot, float **arraysmall, float **arraybig, int *endsmall, int *endbig);
@@ -100,9 +101,9 @@ void generateNumbers(float *numberPart,int partLength, int cal)
 }
 
 /***Validates the stability of the operation****/
-void validation(float median,int partLength,int size,float *numberPart,int processId)
+void validation(float median,int partLength,int size,float *numberPart,int processId,MPI_Comm comm)
 {
-    MPI_Bcast(&median,1,MPI_FLOAT,0,MPI_COMM_WORLD);
+    MPI_Bcast(&median,1,MPI_FLOAT,0,comm);
     int countMin=0;
     int countMax=0;
     int countEq=0;
@@ -116,9 +117,9 @@ void validation(float median,int partLength,int size,float *numberPart,int proce
         else
             countEq++;
     }
-    MPI_Reduce(&countMax,&sumMax,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-    MPI_Reduce(&countMin,&sumMin,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-    MPI_Reduce(&countEq,&sumEq,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+    MPI_Reduce(&countMax,&sumMax,1,MPI_INT,MPI_SUM,0,comm);
+    MPI_Reduce(&countMin,&sumMin,1,MPI_INT,MPI_SUM,0,comm);
+    MPI_Reduce(&countEq,&sumEq,1,MPI_INT,MPI_SUM,0,comm);
     if(processId==0)
     {
         if((sumMax<=size/2)&&(sumMin<=size/2))  //Checks if both the lower and higher values occupy less than 50% of the total array.
@@ -162,7 +163,7 @@ void validationST(float median, int size, float *numberPart)
 }
 
 /****Part executed only by the Master Node****/
-float masterPart(int noProcesses,int processId,int size,int partLength,float *numberPart) //MASTER NODE CODE
+float masterPart(int noProcesses,int processId,int size,int partLength,float *numberPart,MPI_Comm comm) //MASTER NODE CODE
 {
     int elements,i,keepBigSet,sumSets,finalize,randomNode,k;
     float pivot, tempPivot, median;
@@ -216,7 +217,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
         if(checkIdentical!=0)
         {
             int useNewPivotMax=0;
-	        MPI_Reduce(&useNewPivot,&useNewPivotMax,1,MPI_INT,MPI_MAX,0,MPI_COMM_WORLD); //FIRST(OPTIONAL)
+	        MPI_Reduce(&useNewPivot,&useNewPivotMax,1,MPI_INT,MPI_MAX,0,comm); //FIRST(OPTIONAL)
 											     //REDUCE
 											     //: MAX
 											     //useNewPivot
@@ -224,7 +225,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             {
                 median=pivot;
                 finalize=1;
-                MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD); //FIRST(OPTIONAL) BROADCAST : WAIT
+                MPI_Bcast(&finalize,1,MPI_INT,0,comm); //FIRST(OPTIONAL) BROADCAST : WAIT
 								 //FOR FINALIZE COMMAND OR NOT
                 gettimeofday(&second, &tzp);
                 if(first.tv_usec>second.tv_usec)
@@ -235,8 +236,8 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
                 lapsed.tv_usec = second.tv_usec - first.tv_usec;
                 lapsed.tv_sec = second.tv_sec - first.tv_sec;
                 printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
-                validation(median,partLength,size,numberPart,processId);
-                MPI_Finalize();
+                validation(median,partLength,size,numberPart,processId,comm);
+                //MPI_Finalize();
                 free(pivotArray);
                 return median;
             }
@@ -245,8 +246,8 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
                 finalize=0;
                 int useit=0;
                 randomCounter2++;
-                MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD);
-                MPI_Gather(&useNewPivot, 1, MPI_INT, pivotArray, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Bcast(&finalize,1,MPI_INT,0,comm);
+                MPI_Gather(&useNewPivot, 1, MPI_INT, pivotArray, 1, MPI_INT, 0, comm);
 		//Gather every value and chose a node to change the pivot.
 		
                 for(i=0;i<activeSize;i++)
@@ -278,7 +279,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             }
         }
         if(useNewPivot!=0)
-            MPI_Bcast(&randomNode,1,MPI_INT,0,MPI_COMM_WORLD);  //THIRD(OPTIONAL) BROADCAST :
+            MPI_Bcast(&randomNode,1,MPI_INT,0,comm);  //THIRD(OPTIONAL) BROADCAST :
 								//BROADCAST THE SPECIAL NODE
         if(useNewPivot==0)  //if we didnt choose a special Node, choose the node that will pick the
 			    //pivot in a clockwise manner. Only selects one of the active nodes.
@@ -287,7 +288,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
                 randomCounter=0; //Fail safe
             randomNode=activeNodes[randomCounter];
             randomCounter++;			//Increase the counter
-            MPI_Bcast(&randomNode,1,MPI_INT,0,MPI_COMM_WORLD);   //FIRST BROADCAST : SENDING
+            MPI_Bcast(&randomNode,1,MPI_INT,0,comm);   //FIRST BROADCAST : SENDING
 								 //randomnode, who will chose
         }
         if(randomNode==processId)  //If i am to choose the pivot.....
@@ -296,18 +297,18 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             {
                 srand(time(NULL));
                 pivot=arrayToUse[rand() % elements];
-                MPI_Bcast(&pivot,1,MPI_FLOAT,0,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING PIVOT k
+                MPI_Bcast(&pivot,1,MPI_FLOAT,0,comm); //SECOND BROADCAST : SENDING PIVOT k
 								//ton stelnw sto lao
 	        }
             else
             {
-                MPI_Bcast(&tempPivot,1,MPI_FLOAT,0,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING
+                MPI_Bcast(&tempPivot,1,MPI_FLOAT,0,comm); //SECOND BROADCAST : SENDING
 								    //PIVOT k ton stelnw sto lao
                 pivot=tempPivot;
             }
         }
         else //If not.. wait for the pivot to be received.
-            MPI_Bcast(&pivot,1,MPI_FLOAT,randomNode,MPI_COMM_WORLD);  // SECOND BROADCAST : RECEIVING PIVOT
+            MPI_Bcast(&pivot,1,MPI_FLOAT,randomNode,comm);  // SECOND BROADCAST : RECEIVING PIVOT
         if(stillActive==1)  //If i still have values in my array.. proceed
         {
             partition(arrayToUse,elements,pivot,&arraySmall,&arrayBig,&endSmall,&endBig); //I partition my array
@@ -322,9 +323,9 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
         }
         sumSets=0;
 	    //We add the bigSet Values to decide if we keep the small or the big array
-	MPI_Reduce(&endBig,&sumSets,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);  //FIRST REDUCE : SUM OF
+	MPI_Reduce(&endBig,&sumSets,1,MPI_INT,MPI_SUM,0,comm);  //FIRST REDUCE : SUM OF
 									  //BIG
-        MPI_Bcast(&sumSets,1,MPI_INT,0,MPI_COMM_WORLD);
+        MPI_Bcast(&sumSets,1,MPI_INT,0,comm);
         if(oldSumSets==sumSets)
             checkIdentical=1;
         else
@@ -363,7 +364,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
 	    {
 		    median=pivot;
 		    finalize=1; //dilwnw finalaize =1
-		    MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD); //to stelnw se olous, oi opoioi
+		    MPI_Bcast(&finalize,1,MPI_INT,0,comm); //to stelnw se olous, oi opoioi
 								     //an laboun finalize =1 tote
 								     //kaloun MPI finalize k telos
 		    gettimeofday(&second, &tzp);
@@ -375,17 +376,17 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             lapsed.tv_usec = second.tv_usec - first.tv_usec;
             lapsed.tv_sec = second.tv_sec - first.tv_sec;
             printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
-		    validation(median,partLength,size,numberPart,processId);
-            MPI_Finalize();
+	    validation(median,partLength,size,numberPart,processId,comm);
+            //MPI_Finalize();
             free(pivotArray);
             return median;
         }
         finalize=0; //an den exw mpei sta if den exw steilei timi gia finalize.. oi alloi omws
 		    //perimenoun na laboun kati, stelnw loipon to 0 pou simainei sunexizoume
-        MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD);	//SECOND BROADCAST : WAIT FOR
+        MPI_Bcast(&finalize,1,MPI_INT,0,comm);	//SECOND BROADCAST : WAIT FOR
 								//FINALIZE COMMAND OR NOT
         //edw tous stelnw to keepbigset gia na doun ti tha dialeksoun
-	MPI_Bcast(&keepBigSet,1,MPI_INT,0,MPI_COMM_WORLD);    //THIRD BROADCAST: SEND keepBigset
+	MPI_Bcast(&keepBigSet,1,MPI_INT,0,comm);    //THIRD BROADCAST: SEND keepBigset
 							      //boolean
         if(dropoutFlag==1 && stillActive==1) //edw sumfwna me to dropoutflag pou orisame prin an
 					     //einai 1 kalwtin sinartisi pou me petaei apo ton
@@ -403,7 +404,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
         {
             if(activeNodes[i]!=0)
             {
-                MPI_Recv(&flag,1,MPI_INT,activeNodes[i],1,MPI_COMM_WORLD,&Stat);  //FIRST RECEIVE :
+                MPI_Recv(&flag,1,MPI_INT,activeNodes[i],1,comm,&Stat);  //FIRST RECEIVE :
 										  //RECEIVE active
 										  //or not
                 if(flag==1)
@@ -414,7 +415,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
 }
 
 /***Executed only by Slave nodes!!*****/
-void slavePart(int processId,int partLength, float *numberPart,int size)  //code here is for the
+void slavePart(int processId,int partLength, float *numberPart,int size, MPI_Comm comm)  //code here is for the
 									  //cheap slaves :P
 {
     int dropoutflag,elements,i,sumSets,finalize,keepBigSet,randomNode;
@@ -454,27 +455,27 @@ void slavePart(int processId,int partLength, float *numberPart,int size)  //code
         if(checkIdentical!=0)
         {
             int useNewPivotMax=0;
-            MPI_Reduce(&useNewPivot,&useNewPivotMax,1,MPI_INT,MPI_MAX,0,MPI_COMM_WORLD);
-            MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD);//an o master apo to keepbigset k apo to
+            MPI_Reduce(&useNewPivot,&useNewPivotMax,1,MPI_INT,MPI_MAX,0,comm);
+            MPI_Bcast(&finalize,1,MPI_INT,0,comm);//an o master apo to keepbigset k apo to
 							    //count apofasisei oti teleiwsame mou
 							    //stelnei 1, alliws 0 sunexizoume
             if(finalize==1)
             {
                 float median=0.0;
-                validation(median,partLength,size,numberPart,processId);
-                MPI_Finalize();
+                validation(median,partLength,size,numberPart,processId,comm);
+                //MPI_Finalize();
                 return ;
             }
             else
             {
-                MPI_Gather(&useNewPivot, 1, MPI_INT, pivotArray, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Gather(&useNewPivot, 1, MPI_INT, pivotArray, 1, MPI_INT, 0, comm);
             }
         }
-        MPI_Bcast(&randomNode,1,MPI_INT,0,MPI_COMM_WORLD); //FIRST BROAD CAST : RECEIVING RANDOM
+        MPI_Bcast(&randomNode,1,MPI_INT,0,comm); //FIRST BROAD CAST : RECEIVING RANDOM
 							   //NODE, perimenw na dw poios einaito done
         if(randomNode!=processId) //means I am not the one to chose pivot.. so I wait to receive the
 				  //pivot
-	  MPI_Bcast(&pivot,1,MPI_FLOAT,randomNode,MPI_COMM_WORLD);       //SECOND BROADCAST :
+	  MPI_Bcast(&pivot,1,MPI_FLOAT,randomNode,comm);       //SECOND BROADCAST :
 									 //RECEIVING PIVOT
         else if(randomNode==processId) //I am choosing suckers
         {
@@ -482,12 +483,12 @@ void slavePart(int processId,int partLength, float *numberPart,int size)  //code
             {
                 srand(time(NULL));
                 pivot=arrayToUse[rand() % elements];
-                MPI_Bcast(&pivot,1,MPI_FLOAT,processId,MPI_COMM_WORLD); //SECOND BROADCAST : SENDING
+                MPI_Bcast(&pivot,1,MPI_FLOAT,processId,comm); //SECOND BROADCAST : SENDING
 									//PIVOT k ton stelnw sto lao
             }
             else
             {
-                MPI_Bcast(&tempPivot,1,MPI_FLOAT,processId,MPI_COMM_WORLD); //SECOND BROADCAST :
+                MPI_Bcast(&tempPivot,1,MPI_FLOAT,processId,comm); //SECOND BROADCAST :
 									    //SENDING PIVOT k ton
 									    //stelnw sto lao
                 pivot=tempPivot;
@@ -505,11 +506,11 @@ void slavePart(int processId,int partLength, float *numberPart,int size)  //code
         }
         //an eimai inactive stelnw endbig=0 gia to bigset pou den epireazei
         sumSets=0;
-        MPI_Reduce(&endBig,&sumSets,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD); //FIRST REDUCE : SUM OF
+        MPI_Reduce(&endBig,&sumSets,1,MPI_INT,MPI_SUM,0,comm); //FIRST REDUCE : SUM OF
 									 //BIG, stelnw ola ta bigset
 									 //gia na athroistoun sotn
 									 //master
-        MPI_Bcast(&sumSets,1,MPI_INT,0,MPI_COMM_WORLD);
+        MPI_Bcast(&sumSets,1,MPI_INT,0,comm);
         if(oldSumSets==sumSets)
             checkIdentical=1;
         else
@@ -517,17 +518,17 @@ void slavePart(int processId,int partLength, float *numberPart,int size)  //code
             oldSumSets=sumSets;
             checkIdentical=0;
         }
-        MPI_Bcast(&finalize,1,MPI_INT,0,MPI_COMM_WORLD);//an o master apo to keepbigset k apo to
+        MPI_Bcast(&finalize,1,MPI_INT,0,comm);//an o master apo to keepbigset k apo to
 							//count apofasisei oti teleiwsame mou
 							//stelnei 1, alliws 0 sunexizoume
         if(finalize==1)
         {
 	    float median=0.0;
-            validation(median,partLength,size,numberPart,processId);
-            MPI_Finalize();
+            validation(median,partLength,size,numberPart,processId,comm);
+            //MPI_Finalize();
             return ;
         }
-        MPI_Bcast(&keepBigSet,1,MPI_INT,0,MPI_COMM_WORLD);//THIRD BROADCAST: Receive keepBigset
+        MPI_Bcast(&keepBigSet,1,MPI_INT,0,comm);//THIRD BROADCAST: Receive keepBigset
 							  //boolean, edw lambanw an krataw to mikro
 							  //i megalo set.
             //afou elaba ton keepbigset an eimai active krataw enan apo tous duo pinake small h
@@ -562,18 +563,18 @@ void slavePart(int processId,int partLength, float *numberPart,int size)  //code
         //sunexizw dunamika
         if(dropoutflag==1 && stillActive==1)
         {
-            MPI_Send(&dropoutflag,1,MPI_INT,0,1,MPI_COMM_WORLD); //FIRST SEND : send active or not
+            MPI_Send(&dropoutflag,1,MPI_INT,0,1,comm); //FIRST SEND : send active or not
             stillActive=0;
         }
         else if(stillActive==0)
         {
             dropoutflag=-1;
-            MPI_Send(&dropoutflag,1,MPI_INT,0,1,MPI_COMM_WORLD); //FIRST SEND : send active or not
+            MPI_Send(&dropoutflag,1,MPI_INT,0,1,comm); //FIRST SEND : send active or not
         }
         else
         {
             dropoutflag=0;
-            MPI_Send(&dropoutflag,1,MPI_INT,0,1,MPI_COMM_WORLD); //FIRST SEND : send active or not
+            MPI_Send(&dropoutflag,1,MPI_INT,0,1,comm); //FIRST SEND : send active or not
         }
     }
 }
@@ -585,61 +586,100 @@ int main (int argc, char **argv)
     int processId,noProcesses,size,partLength;
     float *numberPart,median;
 
+    int l, recursions, world_pid, color, p;
+    MPI_Comm group_old, group_comm;
+    
+
     size=atoi(argv[1]);
+    recursions = atoi(argv[2]);
     MPI_Init (&argc, &argv);	/* starts MPI */
     MPI_Comm_rank (MPI_COMM_WORLD, &processId);	/* get current process id */
     MPI_Comm_size (MPI_COMM_WORLD, &noProcesses);	/* get number of processes */
-    if(processId==0)
-    {
-        printf("size: %d processes: %d\n",size,noProcesses);
-        if(noProcesses>1)
-        {
-            if(size%noProcesses==0)
-                partLength=(size/noProcesses);
-            else
-                partLength=(size/noProcesses)+1;
-            sendLengths(size,noProcesses);
-            numberPart=(float*)malloc(partLength*sizeof(float));
-            generateNumbers(numberPart,partLength,processId);
-        }
-        else
-        {
-            numberPart=(float*)malloc(size*sizeof(float));
-            generateNumbers(numberPart,size,processId);
-            struct timeval first, second, lapsed;
-            struct timezone tzp;
-            gettimeofday(&first, &tzp);
-            median=selection(numberPart,size);
-            gettimeofday(&second, &tzp);
-            if(first.tv_usec>second.tv_usec)
-            {
-                second.tv_usec += 1000000;
-                second.tv_sec--;
-            }
-            lapsed.tv_usec = second.tv_usec - first.tv_usec;
-            lapsed.tv_sec = second.tv_sec - first.tv_sec;
-            validationST(median,size,numberPart);
-            printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
-            printf("Median: %.5f\n",median);
-            free(numberPart);
-            MPI_Finalize();
-            return 0;
-        }
+
+    if (noProcesses % 2 != 0 && noProcesses != 1) {
+      if (processId == 0) printf ("please enter -np, power of two\n");
+      exit(1);
     }
-    else
-    {
-        MPI_Recv(&partLength,1,MPI_INT,0,1,MPI_COMM_WORLD,&Stat);
-        numberPart=(float*)malloc(partLength*sizeof(float));
-        generateNumbers(numberPart,partLength,processId);
+
+    world_pid = processId;
+    p = noProcesses;
+    group_comm = MPI_COMM_WORLD;
+
+    for (l=0; l<recursions; l++) {
+
+      //setting the communicators
+      //vvvvvvvvvvvvvvvvvvvvvvvvv
+
+      if (l) {
+	color = processId / (noProcesses / 2);
+	group_old = group_comm;
+	assert( MPI_Comm_split( group_old, color, world_pid, &group_comm ) == 0 );
+	MPI_Comm_rank( group_comm, &processId );
+	MPI_Comm_size( group_comm, &noProcesses);
+	if(l>1) assert( MPI_Comm_free( &group_old ) == 0 );
+      }
+
+      //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
+      //setting the communicators
+
+      //random number generator
+      //VVVVVVVVVVVVVVVVVVVVVVV
+      if(!l) {
+	if(noProcesses==1) {   // just one process
+	  numberPart=(float*)malloc(size*sizeof(float));
+	  generateNumbers(numberPart,size,processId);
+	}
+	else {                 // many processes 
+	  if(processId==0) {      // the leader
+	    if(size%noProcesses==0)
+	      partLength=(size/noProcesses);
+	    else
+	      partLength=(size/noProcesses)+1;
+	    sendLengths(size,noProcesses);
+	    numberPart=(float*)malloc(partLength*sizeof(float));
+	    generateNumbers(numberPart,partLength,processId);
+	  }
+	  else {                  // the slaves
+	    MPI_Recv(&partLength,1,MPI_INT,0,1,MPI_COMM_WORLD,&Stat);
+	    numberPart=(float*)malloc(partLength*sizeof(float));
+	    generateNumbers(numberPart,partLength,processId);
+	  }
+	}
+      }
+      //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
+      //random number generator
+    
+      if(processId==0){
+	printf("size: %d processes: %d\n",size,noProcesses);
+
+	if(noProcesses==1) {
+	  struct timeval first, second, lapsed;
+	  struct timezone tzp;
+	  gettimeofday(&first, &tzp);
+	  median=selection(numberPart,size);
+	  gettimeofday(&second, &tzp);
+	  if(first.tv_usec>second.tv_usec) {
+	    second.tv_usec += 1000000;
+	    second.tv_sec--;
+	  }
+	  lapsed.tv_usec = second.tv_usec - first.tv_usec;
+	  lapsed.tv_sec = second.tv_sec - first.tv_sec;
+	  validationST(median,size,numberPart);
+	  printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
+	  printf("Median: %.5f\n",median);
+	}
+      }
+      
+      if(processId==0) {
+	median=masterPart(noProcesses,processId,size,partLength,numberPart,group_comm);
+	printf("Median: %.5f\n",median);
+      }
+      else
+	slavePart(processId,partLength,numberPart,size,group_comm);
+
     }
-    if(processId==0)
-    {
-        median=masterPart(noProcesses,processId,size,partLength,numberPart);
-        printf("Median: %.5f\n",median);
-    }
-    else
-        slavePart(processId,partLength,numberPart,size);
     free(numberPart);
+    MPI_Finalize();
     return 0;
 }
 
@@ -647,15 +687,15 @@ int main (int argc, char **argv)
 /*========================FIND MEDIAN FUNCTIONS====================================
  * ================================================================================
  * ================================================================================
-*/
+ */
 
 
 /****Partitions the Array into larger and smaller than the pivot values****/
 void partition (float *array, int elements, float pivot, float **arraysmall, float **arraybig, int *endsmall, int *endbig)
 {
-    int right=elements-1;
-    int left=0;
-    int pos;
+  int right=elements-1;
+  int left=0;
+  int pos;
     if(elements==1)
     {
         if(pivot>array[0])

@@ -1,4 +1,4 @@
-#!/bin/sh
+#! /bin/sh
 
 all:
-	mpicc mpiFindMedian.c -o mpifm
+	mpicc mpiFindMedian.c -o mpiF
