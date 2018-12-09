@@ -59,7 +59,7 @@ void removeElement(int *array, int *size, int element)
 }
 
 /***Calculate Lengths and Send them to the corresponding Node***/
-void sendLengths(int size,int noProcesses)
+void sendLengths(int size,int noProcesses,MPI_Comm comm)
 {
     int i,partLength;
     if(size%noProcesses!=0)
@@ -67,16 +67,16 @@ void sendLengths(int size,int noProcesses)
         int left=size-(size/noProcesses)*noProcesses;  //Split the size in as close to equal as possible parts
         partLength=(size/noProcesses)+1;
         for(i=1;i<left;i++)      //start from 1 because we create the zero one through the main function
-            MPI_Send(&partLength,1,MPI_INT,i,1,MPI_COMM_WORLD);
+            MPI_Send(&partLength,1,MPI_INT,i,1,comm);
         partLength-=1;
         for(i=left;i<noProcesses;i++)
-            MPI_Send(&partLength,1,MPI_INT,i,1,MPI_COMM_WORLD);
+            MPI_Send(&partLength,1,MPI_INT,i,1,comm);
     }
     else
     {
         partLength=size/noProcesses;
         for(i=1;i<noProcesses;i++)
-            MPI_Send(&partLength,1,MPI_INT,i,1,MPI_COMM_WORLD);
+            MPI_Send(&partLength,1,MPI_INT,i,1,comm);
     }
 }
 
@@ -605,6 +605,33 @@ int main (int argc, char **argv)
     p = noProcesses;
     group_comm = MPI_COMM_WORLD;
 
+    
+    //random number generator
+    //VVVVVVVVVVVVVVVVVVVVVVV
+    if(noProcesses==1) {   // just one process
+      numberPart=(float*)malloc(size*sizeof(float));
+      generateNumbers(numberPart,size,processId);
+    }
+    else {                 // many processes 
+      if(processId==0) {      // the leader
+	if(size%noProcesses==0)
+	  partLength=(size/noProcesses);
+	else
+	  partLength=(size/noProcesses)+1;
+	sendLengths(size ,noProcesses,group_comm);
+	numberPart=(float*)malloc(partLength*sizeof(float));
+	generateNumbers(numberPart,partLength,processId);
+      }
+      else {                  // the slaves
+	MPI_Recv(&partLength,1,MPI_INT,0,1,MPI_COMM_WORLD,&Stat);
+	numberPart=(float*)malloc(partLength*sizeof(float));
+	generateNumbers(numberPart,partLength,processId);
+      }
+    }
+    //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
+    //random number generator
+    
+
     for (l=0; l<recursions; l++) {
 
       //setting the communicators
@@ -617,38 +644,25 @@ int main (int argc, char **argv)
 	MPI_Comm_rank( group_comm, &processId );
 	MPI_Comm_size( group_comm, &noProcesses);
 	if(l>1) assert( MPI_Comm_free( &group_old ) == 0 );
+	
+	size = size/2;  // this should probably be done while splitting the data
+
+	if(processId==0) {
+	  if(size%noProcesses==0)
+	    partLength=(size/noProcesses);
+	  else
+	    partLength=(size/noProcesses)+1;
+	  sendLengths(size ,noProcesses, group_comm);
+	}
+	else {
+	  MPI_Recv(&partLength,1,MPI_INT,0,1,group_comm,&Stat);
+	}
+
       }
 
       //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
       //setting the communicators
 
-      //random number generator
-      //VVVVVVVVVVVVVVVVVVVVVVV
-      if(!l) {
-	if(noProcesses==1) {   // just one process
-	  numberPart=(float*)malloc(size*sizeof(float));
-	  generateNumbers(numberPart,size,processId);
-	}
-	else {                 // many processes 
-	  if(processId==0) {      // the leader
-	    if(size%noProcesses==0)
-	      partLength=(size/noProcesses);
-	    else
-	      partLength=(size/noProcesses)+1;
-	    sendLengths(size,noProcesses);
-	    numberPart=(float*)malloc(partLength*sizeof(float));
-	    generateNumbers(numberPart,partLength,processId);
-	  }
-	  else {                  // the slaves
-	    MPI_Recv(&partLength,1,MPI_INT,0,1,MPI_COMM_WORLD,&Stat);
-	    numberPart=(float*)malloc(partLength*sizeof(float));
-	    generateNumbers(numberPart,partLength,processId);
-	  }
-	}
-      }
-      //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
-      //random number generator
-    
       if(processId==0){
 	printf("size: %d processes: %d\n",size,noProcesses);
 
