@@ -15,6 +15,15 @@ struct a_point {
   intype *data;
 };
 
+struct vp_tree {
+  struct a_point center;
+  float radius;
+  struct vp_tree *bigger;
+  struct vp_tree *smaller;
+  struct vp_tree *root;
+  int MPI_process_id_kati;
+  int depth;
+};
 
 int read_data(FILE *bin, points *x) {
   intype **input_data;
@@ -84,11 +93,11 @@ int set_vp(a_point *vp) {
 	if (i==0) {
 	  for (int n=0; n<D; n++)
 	    vp->data[n] = x->data[parindex][n];
-	  MPI_Bcast(&vp->data,D,MPI_DOUBLE,0,comm); //used MPI_DOUBLE here!!
+	  MPI_Bcast(vp->data,D,MPI_DOUBLE,0,comm); //used MPI_DOUBLE here!!
 	}
 	else {
 	  MPI_Send(&parindex,1,MPI_INT,i,1,comm);
-	  MPI_Bcast(&vp->data,D,MPI_DOUBLE,i,comm); //used MPI_DOUBLE here!!
+	  MPI_Bcast(vp->data,D,MPI_DOUBLE,i,comm); //used MPI_DOUBLE here!!
 	}
 	flag=0;
 	break;
@@ -102,10 +111,10 @@ int set_vp(a_point *vp) {
       MPI_Recv(&index,1,MPI_INT,0,1,comm,&stat);
       for (int n=0; n<D; n++)
 	vp->data[n] = x->data[index][n];
-      MPI_Bcast(&vp->data,D,MPI_DOUBLE,chosen,comm); //used MPI_DOUBLE here!!
+      MPI_Bcast(vp->data,D,MPI_DOUBLE,chosen,comm); //used MPI_DOUBLE here!!
     }
     else
-      MPI_Bcast(&vp->data,D,MPI_DOUBLE,chosen,comm); //used MPI_DOUBLE here!!
+      MPI_Bcast(vp->data,D,MPI_DOUBLE,chosen,comm); //used MPI_DOUBLE here!!
     flag=0;
   }
 		  
@@ -147,8 +156,91 @@ float find_median(float *dist) {
 }
 
  int points_exchange(a_point *vp, points *x, float *dist, float median) {
+   int count=0;
+   int noSwaps=0;
+   int =0;
+   int SRtable[noProcesses];
+   int sw[N]; // indexes of elements to swap
+   int hp = noProcesses/2;
+   int priority=0;
+   int countS=0;
+   int swapid,send_start,send_finish,queue_start,length;
+   intype **swap_data;
+   MPI_Status *status;
+   MPI_Request *q;
 
+   //points toswap;
+
+   //a_point temp;
+   //temp->data = (*intype)malloc(8*sizeof(intype));
+
+   if (processId<hp) {
+     for (int n=0;n<N;n++) {
+       if (dist[n]<=median)
+	 sw[noSwaps++] = n;
+     }
+   }
+   else {
+     for (int n=0;n<N;n++) {
+       if (dist[n]>median)
+	 sw[noSwaps++] = n;
+     }
+   }
+
+   if (noSwaps==0) return 0;
+
+   length = noSwaps * sizeof(intype *) + noSwaps * D * sizeof(intype);
+   swap_data = (intype **)malloc(length);
+   if (swap_data == 0) {
+     printf ("Could not allocate %d bytes for swap points struct creation", length);
+     exit(1);
+   }
+
+   for (int n=0;n<noSwaps;n++)
+     for (int i=0;i<8;i++)
+       swap_data[n][i] = x->data[sw[n]][i];
+
+   status = (MPI_Status *)malloc(noSwaps*2*sizeof(MPI_Status));
+   q = (MPI_Request *)malloc(noSwaps*2*sizeof(MPI_Request));
+   if (status==0 || q==0) {
+     printf ("Could not allocate memory for the MPI_Status and MPI_Request arrays");
+     exit(1);
+   }
+
+   //   toswap->data = swap_data;
+
+   //procceses 0 - np/2-1 keep the smaller elements and np/2 - np the larger
+   MPI_Allgather(noSwaps,1,MPI_INT,SRtable,1,MPI_INT,comm);
+
+   
+   if (processId<hp){
+     send_start = hp ;
+     send_finish = noProcesses;
+     queue_start = 0;
+   }
+   else {
+     send_start = 0 ;
+     send_finish = hp;
+     queue_start = hp;
+   }
+   
+   for (int p=queue_start;p<processId;p++)
+     priority+=SRtable[p];
+   swapid = priority;
+     
+   for (int s=send_start;s<send_finish;s++) {
+     priority-=SRtable[p];
+     while (priority<0 && countS>=noSwaps) {
+       MPI_Isend(swap_data[countS],8,MPI_DOUBLE,s,swapid,comm,q+countS);
+       MPI_Recv(x->data[sw[countS]],8,MPI_DOUBLE,s,swapid,comm,q+noSwaps+countS);
+       priority++;
+       swapid++;
+       countS++;
+     }
+     if(countS>=noSwaps) break; // just to make sure it breaks, it's out of the while loop
+   }
+      
+   MPI_waitall(noSwaps*2,q,status);
    
   return 0;
 }
-
