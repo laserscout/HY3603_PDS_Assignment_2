@@ -3,18 +3,9 @@
 #include <assert.h>
 #include <mpi.h>
 #include <math.h>
+#include <time.h>
 #include "vp_helper.h"
 #include "mpiFindMedian.h"
-
-typedef double intype;
-
-struct points {
-  intype **data;
-};
-
-struct a_point {
-  intype *data;
-};
 
 struct vp_tree {
   struct a_point center;
@@ -26,7 +17,9 @@ struct vp_tree {
   int depth;
 };
 
-int read_data(FILE *bin, points *x) {
+//extern MPI_Comm comm;
+
+int read_data(FILE *bin, struct points *x) {
   intype **input_data;
   int length;
 
@@ -43,7 +36,33 @@ int read_data(FILE *bin, points *x) {
 
   fclose(bin);
 
-  points->data = input_data;
+  x->data = input_data;
+  return 0;
+}
+
+int rand_data(struct points *x) {
+  intype **input_data;
+  int length;
+  float a = 10;
+  time_t t;
+
+
+  length = N * sizeof(intype *) + N * D * sizeof(intype);
+  input_data = (intype **)malloc(length);
+  if (input_data == 0) {
+    printf ("Could not allocate %d bytes for points struct creation", length);
+    exit(1);
+  }
+
+  srand( (unsigned)time(&t) );
+
+  for(int i=0; i<N; i++) {
+    for(int d=0;d<D;d++){
+      input_data[i][d] = ((double)rand()/(double)(RAND_MAX)) * a; //https://stackoverflow.com/a/13409133
+    }
+  }
+
+  x->data = input_data;
   return 0;
 }
 
@@ -52,9 +71,9 @@ int comm_split() {
   MPI_Comm group_old;
   
   color = processId/(noProcesses/2);
-  group_old = *comm;
+  group_old = comm;
   
-  assert( MPI_Comm_split( group_old, color, globalId, comm ) == 0 );
+  assert( MPI_Comm_split( group_old, color, globalId, &comm ) == 0 );
   MPI_Comm_rank( comm, &processId );
   MPI_Comm_size( comm, &noProcesses);
   assert( MPI_Comm_free( &group_old ) == 0 ); // make sure that the first group isn't the global
@@ -62,7 +81,7 @@ int comm_split() {
   return 0;
 }
  
-int set_vp(a_point *vp) {
+int set_vp(struct points *x, struct a_point *vp) {
 
   int index, flag=1;
   MPI_Status stat;
@@ -77,7 +96,7 @@ int set_vp(a_point *vp) {
     srand( (unsigned)time(&t) );
     index = rand() % size; // a number from 0 to size
     if (index>size) {
-      printf{"Error,rand generated an index larger than the data size/n %d/n",index);
+      printf("Error,rand generated an index larger than the data size/n %d/n",index);
       exit(1);
     }
     rounds = size / noProcesses;
@@ -122,7 +141,7 @@ int set_vp(a_point *vp) {
   return flag;
 }
 
-int find_dists(points *x, a_point *vp, float *dist) {
+int find_dists(struct points *x, struct  a_point *vp, float *dist) {
   double sum=0.0;
   
   dist = (float *)malloc(N*sizeof(float));
@@ -156,10 +175,9 @@ float find_median(float *dist) {
   return median;
 }
 
- int points_exchange(a_point *vp, points *x, float *dist, float median) {
+ int points_exchange(struct a_point *vp, struct  points *x, float *dist, float median) {
    int count=0;
    int noSwaps=0;
-   int =0;
    int SRtable[noProcesses];
    int sw[N]; // indexes of elements to swap
    int hp = noProcesses/2;
@@ -211,7 +229,7 @@ float find_median(float *dist) {
    //   toswap->data = swap_data;
 
    //procceses 0 - np/2-1 keep the smaller elements and np/2 - np the larger
-   MPI_Allgather(noSwaps,1,MPI_INT,SRtable,1,MPI_INT,comm);
+   MPI_Allgather(&noSwaps,1,MPI_INT,SRtable,1,MPI_INT,comm);
 
    
    if (processId<hp){
@@ -229,11 +247,11 @@ float find_median(float *dist) {
      priority+=SRtable[p];
    swapid = priority;
      
-   for (int s=send_start;s<send_finish;s++) {
+   for (int p=send_start;p<send_finish;p++) {
      priority-=SRtable[p];
      while (priority<0 && countS>=noSwaps) {
-       MPI_Isend(swap_data[countS],8,MPI_DOUBLE,s,swapid,comm,q+countS);
-       MPI_Recv(x->data[sw[countS]],8,MPI_DOUBLE,s,swapid,comm,q+noSwaps+countS);
+       MPI_Isend(swap_data[countS],8,MPI_DOUBLE,p,swapid,comm,q+countS);
+       MPI_Irecv(x->data[sw[countS]],8,MPI_DOUBLE,p,swapid,comm,q+noSwaps+countS);
        priority++;
        swapid++;
        countS++;
@@ -241,7 +259,7 @@ float find_median(float *dist) {
      if(countS>=noSwaps) break; // just to make sure it breaks, it's out of the while loop
    }
       
-   MPI_waitall(noSwaps*2,q,status);
+   MPI_Waitall(noSwaps*2,q,status);
    free(q);
    free(status);
    free(swap_data);

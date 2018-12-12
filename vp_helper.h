@@ -1,8 +1,15 @@
 #ifndef _VP_HELPER_H_
 #define _VP_HELPER_H_
 
-struct points;
-struct a_point;
+typedef double intype;
+
+struct points {
+  intype **data;
+};
+
+struct a_point {
+  intype *data;
+};
 
 extern MPI_Comm comm;
 extern int processId;
@@ -13,11 +20,12 @@ extern int D;
 extern int N;
 
 
-int read_data(FILE *bin, points *x);
+int read_data(FILE *bin, struct points *x);
+int rand_data(struct points *x);
 int comm_split();
-int set_vp(a_point *vp);
-int find_dists(points *x, a_point *vp, float *dist);
+int set_vp(struct points *x, struct a_point *vp);
+int find_dists(struct points *x, struct a_point *vp, float *dist);
 float find_median(float *dist);
-int points_exchange(a_point *vp, points *x, float *dist, float median);
+int points_exchange(struct a_point *vp, struct points *x, float *dist, float median);
 
 #endif
