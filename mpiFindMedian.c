@@ -35,6 +35,7 @@ SOFTWARE.
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>
+#include "mpiFindMedian.h"
 
 MPI_Status Stat;
 void partition (float *array, int elements, float pivot, float **arraysmall, float **arraybig, int *endsmall, int *endbig);
@@ -581,121 +582,121 @@ void slavePart(int processId,int partLength, float *numberPart,int size, MPI_Com
 
 
 /*****MAIN!!!!!!!!!!*****/
-int main (int argc, char **argv)
-{
-    int processId,noProcesses,size,partLength;
-    float *numberPart,median;
+/* int main (int argc, char **argv) */
+/* { */
+/*     int processId,noProcesses,size,partLength; */
+/*     float *numberPart,median; */
 
-    int l, recursions, world_pid, color, p;
-    MPI_Comm group_old, group_comm;
+/*     int l, recursions, world_pid, color, p; */
+/*     MPI_Comm group_old, group_comm; */
     
 
-    size=atoi(argv[1]);
-    recursions = atoi(argv[2]);
-    MPI_Init (&argc, &argv);	/* starts MPI */
-    MPI_Comm_rank (MPI_COMM_WORLD, &processId);	/* get current process id */
-    MPI_Comm_size (MPI_COMM_WORLD, &noProcesses);	/* get number of processes */
+/*     size=atoi(argv[1]); */
+/*     recursions = atoi(argv[2]); */
+/*     MPI_Init (&argc, &argv);	/\* starts MPI *\/ */
+/*     MPI_Comm_rank (MPI_COMM_WORLD, &processId);	/\* get current process id *\/ */
+/*     MPI_Comm_size (MPI_COMM_WORLD, &noProcesses);	/\* get number of processes *\/ */
 
-    if (noProcesses % 2 != 0 && noProcesses != 1) {
-      if (processId == 0) printf ("please enter -np, power of two\n");
-      exit(1);
-    }
+/*     if (noProcesses % 2 != 0 && noProcesses != 1) { */
+/*       if (processId == 0) printf ("please enter -np, power of two\n"); */
+/*       exit(1); */
+/*     } */
 
-    world_pid = processId;
-    p = noProcesses;
-    group_comm = MPI_COMM_WORLD;
+/*     world_pid = processId; */
+/*     p = noProcesses; */
+/*     group_comm = MPI_COMM_WORLD; */
 
     
-    //random number generator
-    //VVVVVVVVVVVVVVVVVVVVVVV
-    if(noProcesses==1) {   // just one process
-      numberPart=(float*)malloc(size*sizeof(float));
-      generateNumbers(numberPart,size,processId);
-    }
-    else {                 // many processes 
-      if(processId==0) {      // the leader
-	if(size%noProcesses==0)
-	  partLength=(size/noProcesses);
-	else
-	  partLength=(size/noProcesses)+1;
-	sendLengths(size ,noProcesses,group_comm);
-	numberPart=(float*)malloc(partLength*sizeof(float));
-	generateNumbers(numberPart,partLength,processId);
-      }
-      else {                  // the slaves
-	MPI_Recv(&partLength,1,MPI_INT,0,1,MPI_COMM_WORLD,&Stat);
-	numberPart=(float*)malloc(partLength*sizeof(float));
-	generateNumbers(numberPart,partLength,processId);
-      }
-    }
-    //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
-    //random number generator
+/*     //random number generator */
+/*     //VVVVVVVVVVVVVVVVVVVVVVV */
+/*     if(noProcesses==1) {   // just one process */
+/*       numberPart=(float*)malloc(size*sizeof(float)); */
+/*       generateNumbers(numberPart,size,processId); */
+/*     } */
+/*     else {                 // many processes  */
+/*       if(processId==0) {      // the leader */
+/* 	if(size%noProcesses==0) */
+/* 	  partLength=(size/noProcesses); */
+/* 	else */
+/* 	  partLength=(size/noProcesses)+1; */
+/* 	sendLengths(size ,noProcesses,group_comm); */
+/* 	numberPart=(float*)malloc(partLength*sizeof(float)); */
+/* 	generateNumbers(numberPart,partLength,processId); */
+/*       } */
+/*       else {                  // the slaves */
+/* 	MPI_Recv(&partLength,1,MPI_INT,0,1,MPI_COMM_WORLD,&Stat); */
+/* 	numberPart=(float*)malloc(partLength*sizeof(float)); */
+/* 	generateNumbers(numberPart,partLength,processId); */
+/*       } */
+/*     } */
+/*     //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ */
+/*     //random number generator */
     
 
-    for (l=0; l<recursions; l++) {
+/*     for (l=0; l<recursions; l++) { */
 
-      //setting the communicators
-      //vvvvvvvvvvvvvvvvvvvvvvvvv
+/*       //setting the communicators */
+/*       //vvvvvvvvvvvvvvvvvvvvvvvvv */
 
-      if (l) {
-	color = processId / (noProcesses / 2);
-	group_old = group_comm;
-	assert( MPI_Comm_split( group_old, color, world_pid, &group_comm ) == 0 );
-	MPI_Comm_rank( group_comm, &processId );
-	MPI_Comm_size( group_comm, &noProcesses);
-	if(l>1) assert( MPI_Comm_free( &group_old ) == 0 );
+/*       if (l) { */
+/* 	color = processId / (noProcesses / 2); */
+/* 	group_old = group_comm; */
+/* 	assert( MPI_Comm_split( group_old, color, world_pid, &group_comm ) == 0 ); */
+/* 	MPI_Comm_rank( group_comm, &processId ); */
+/* 	MPI_Comm_size( group_comm, &noProcesses); */
+/* 	if(l>1) assert( MPI_Comm_free( &group_old ) == 0 ); */
 	
-	size = size/2;  // this should probably be done while splitting the data
+/* 	size = size/2;  // this should probably be done while splitting the data */
 
-	if(processId==0) {
-	  if(size%noProcesses==0)
-	    partLength=(size/noProcesses);
-	  else
-	    partLength=(size/noProcesses)+1;
-	  sendLengths(size ,noProcesses, group_comm);
-	}
-	else {
-	  MPI_Recv(&partLength,1,MPI_INT,0,1,group_comm,&Stat);
-	}
+/* 	if(processId==0) { */
+/* 	  if(size%noProcesses==0) */
+/* 	    partLength=(size/noProcesses); */
+/* 	  else */
+/* 	    partLength=(size/noProcesses)+1; */
+/* 	  sendLengths(size ,noProcesses, group_comm); */
+/* 	} */
+/* 	else { */
+/* 	  MPI_Recv(&partLength,1,MPI_INT,0,1,group_comm,&Stat); */
+/* 	} */
 
-      }
+/*       } */
 
-      //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ
-      //setting the communicators
+/*       //ΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛΛ */
+/*       //setting the communicators */
 
-      if(processId==0){
-	printf("size: %d processes: %d\n",size,noProcesses);
+/*       if(processId==0){ */
+/* 	printf("size: %d processes: %d\n",size,noProcesses); */
 
-	if(noProcesses==1) {
-	  struct timeval first, second, lapsed;
-	  struct timezone tzp;
-	  gettimeofday(&first, &tzp);
-	  median=selection(numberPart,size);
-	  gettimeofday(&second, &tzp);
-	  if(first.tv_usec>second.tv_usec) {
-	    second.tv_usec += 1000000;
-	    second.tv_sec--;
-	  }
-	  lapsed.tv_usec = second.tv_usec - first.tv_usec;
-	  lapsed.tv_sec = second.tv_sec - first.tv_sec;
-	  validationST(median,size,numberPart);
-	  printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
-	  printf("Median: %.5f\n",median);
-	}
-      }
+/* 	if(noProcesses==1) { */
+/* 	  struct timeval first, second, lapsed; */
+/* 	  struct timezone tzp; */
+/* 	  gettimeofday(&first, &tzp); */
+/* 	  median=selection(numberPart,size); */
+/* 	  gettimeofday(&second, &tzp); */
+/* 	  if(first.tv_usec>second.tv_usec) { */
+/* 	    second.tv_usec += 1000000; */
+/* 	    second.tv_sec--; */
+/* 	  } */
+/* 	  lapsed.tv_usec = second.tv_usec - first.tv_usec; */
+/* 	  lapsed.tv_sec = second.tv_sec - first.tv_sec; */
+/* 	  validationST(median,size,numberPart); */
+/* 	  printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec); */
+/* 	  printf("Median: %.5f\n",median); */
+/* 	} */
+/*       } */
       
-      if(processId==0) {
-	median=masterPart(noProcesses,processId,size,partLength,numberPart,group_comm);
-	printf("Median: %.5f\n",median);
-      }
-      else
-	slavePart(processId,partLength,numberPart,size,group_comm);
+/*       if(processId==0) { */
+/* 	median=masterPart(noProcesses,processId,size,partLength,numberPart,group_comm); */
+/* 	printf("Median: %.5f\n",median); */
+/*       } */
+/*       else */
+/* 	slavePart(processId,partLength,numberPart,size,group_comm); */
 
-    }
-    free(numberPart);
-    MPI_Finalize();
-    return 0;
-}
+/*     } */
+/*     free(numberPart); */
+/*     MPI_Finalize(); */
+/*     return 0; */
+/* } */
 
 
 /*========================FIND MEDIAN FUNCTIONS====================================

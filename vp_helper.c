@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <math.h>
 #include "vp_helper.h"
+#include "mpiFindMedian.h"
 
 typedef double intype;
 
@@ -241,6 +242,8 @@ float find_median(float *dist) {
    }
       
    MPI_waitall(noSwaps*2,q,status);
-   
+   free(q);
+   free(status);
+   free(swap_data);
   return 0;
 }
