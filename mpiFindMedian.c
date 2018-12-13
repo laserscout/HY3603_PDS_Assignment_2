@@ -111,6 +111,7 @@ void validation(float median,int partLength,int size,float *numberPart,int proce
     int sumMax,sumMin,sumEq,i;
     for(i=0;i<partLength;i++)
     {
+      printf("%f ",numberPart[i]);
       if(numberPart[i]>median)
             countMax++;
         else if(numberPart[i]<median)
@@ -132,6 +133,7 @@ void validation(float median,int partLength,int size,float *numberPart,int proce
 	printf("Values greater than median: %d\n",sumMax);
         printf("Values equal to median: %d\n",sumEq);
         printf("Values lower than median: %d\n",sumMin);
+	printf("The median: %f\n",median);
     }
 
 }

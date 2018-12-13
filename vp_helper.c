@@ -7,15 +7,6 @@
 #include "vp_helper.h"
 #include "mpiFindMedian.h"
 
-struct vp_tree {
-  struct a_point center;
-  float radius;
-  struct vp_tree *bigger;
-  struct vp_tree *smaller;
-  struct vp_tree *root;
-  int MPI_process_id_kati;
-  int depth;
-};
 
 //extern MPI_Comm comm;
 
@@ -41,24 +32,28 @@ int read_data(FILE *bin, struct points *x) {
 }
 
 int rand_data(struct points *x) {
-  intype **input_data;
+  intype **input_data, *ptr;
   int length;
   float a = 10;
   time_t t;
 
-
+  printf("rand_data running...\n");
   length = N * sizeof(intype *) + N * D * sizeof(intype);
+  //printf("length=%d\n",length);
   input_data = (intype **)malloc(length);
   if (input_data == 0) {
     printf ("Could not allocate %d bytes for points struct creation", length);
     exit(1);
   }
+  ptr =(intype *)input_data + N;
+  for(int i=0;i<N;i++)
+    input_data[i] = ptr + i*D; //https://www.geeksforgeeks.org/dynamically-allocate-2d-array-c/
 
-  srand( (unsigned)time(&t) );
-
+  srand( (unsigned)time(&t)+processId );
   for(int i=0; i<N; i++) {
     for(int d=0;d<D;d++){
-      input_data[i][d] = ((double)rand()/(double)(RAND_MAX)) * a; //https://stackoverflow.com/a/13409133
+      input_data[i][d] = ((double)rand()/(double)(RAND_MAX))*a; //https://stackoverflow.com/a/13409133
+      //printf("%f ",input_data[i][d]);
     }
   }
 
@@ -137,14 +132,13 @@ int set_vp(struct points *x, struct a_point *vp) {
       MPI_Bcast(vp->data,D,MPI_DOUBLE,chosen,comm); //used MPI_DOUBLE here!!
     flag=0;
   }
-		  
+
   return flag;
 }
 
 int find_dists(struct points *x, struct  a_point *vp, float *dist) {
   double sum=0.0;
-  
-  dist = (float *)malloc(N*sizeof(float));
+
   if (dist==0) {
     printf("Couldn't allocate memory for the distance vector");
     exit(1);
@@ -153,21 +147,29 @@ int find_dists(struct points *x, struct  a_point *vp, float *dist) {
     for (int n=0;n<D;n++)
       sum += exp((double)(x->data[i][n] - vp->data[n]));
     dist[i]= (float)sqrt(sum);
+    printf("%d:dist[%d]=%f\n",processId,i,dist[i]);
     sum=0;
   }
+
   return 0;
 }
 
 float find_median(float *dist) {
   float median;
+
+  //for (int i=0;i<N;i++)
+  //printf("%d:dist[%d]=%f\n",processId,i,dist[i]);
+  //MPI_Barrier;
   
   if (processId==0) {
     if (noProcesses==1){
       median=selection(dist,size);
       validationST(median,size,dist);
     }
-    else
+    else {
       median=masterPart(noProcesses,processId,size,N,dist,comm);
+      printf("median=%f\n",median);
+    }
   }
   else
     slavePart(processId,N,dist,size,comm);
@@ -264,4 +266,52 @@ float find_median(float *dist) {
    free(status);
    free(swap_data);
   return 0;
+}
+
+struct vp_tree * newvp(struct a_point *center, float radius, int depth){
+  struct vp_tree *node = (struct vp_tree *)malloc(sizeof(struct vp_tree));
+  node->center = *center;
+  node->radius = radius;
+  node->bigger = NULL;
+  node->smaller = NULL;
+  node->depth = depth;
+  //struct vp_tree *root;
+  //int MPI_process_id_kati;
+}
+
+int tree_grow(struct vp_tree *root, struct a_point *center, float radius, int depth) {
+  if (processId==0) {
+    root->smaller = newvp(center, radius, depth);
+  }
+  return 0;
+}
+
+void dataprint(struct points *x) {
+  printf("dataprint running...\n");
+  for (int p=0;p<globalNo;p++) {
+  if (p==globalId) {
+      printf("---%d-%d---\n", processId, comm);
+      for (int n=0;n<N;n++) {
+	for (int d=0;d<D;d++) {
+	  printf("%f ", x->data[n][d]);
+	}
+	printf("\n");
+      }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+  }
+}
+
+void pointprint(struct a_point *x) {
+  printf("dataprint running...\n");
+  for (int p=0;p<globalNo;p++) {
+    if (p==globalId) {
+      printf("---%d-%d---\n", processId, comm);
+	for (int d=0;d<D;d++) {
+	  printf("%f ", x->data[d]);
+	}
+	printf("\n");
+    }
+  }
+    MPI_Barrier(MPI_COMM_WORLD);
 }
