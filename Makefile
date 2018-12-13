@@ -3,10 +3,10 @@ OBJ = mpiFindMedian.o vp_helper.o main.o
 TARGET = vpexec
 
 all: $(OBJ)
-	mpicc $^ -o $(TARGET)
+	mpicc $^ -o $(TARGET) -lm
 
 %.o: %.c
-	mpicc -c $^
+	mpicc -c $^ -lm
 
 clean:
 	rm -f *.o *~ $(TARGET)
