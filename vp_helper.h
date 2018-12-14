@@ -12,11 +12,10 @@ struct a_point {
 };
 
 struct vp_tree {
-  struct a_point center;
+  intype *center;
   float radius;
   struct vp_tree *bigger;
   struct vp_tree *smaller;
-  struct vp_tree *root;
   int MPI_process_id_kati;
   int depth;
 };
@@ -35,10 +34,10 @@ int read_data(FILE *bin, struct points *x);
 int rand_data(struct points *x);
 int comm_split();
 int set_vp(struct points *x, struct a_point *vp);
-int find_dists(struct points *x, struct a_point *vp, float *dist);
+int find_dists(struct points *x, struct a_point *vp, float **dist);
 float find_median(float *dist);
 int points_exchange(struct a_point *vp, struct points *x, float *dist, float median);
 int tree_grow(struct vp_tree *root, struct a_point *center, float radius, int depth);
-void dataprint(struct points *x);
-void pointprint(struct a_point *x);
+void dataprint(intype **x, int nom);
+void pointprint(intype *x);
 #endif
