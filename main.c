@@ -26,17 +26,16 @@ int main (int argc, char **argv) {
 
   D = 3;
   N = 16;
+  
   init_size=N;
   MPI_Init (&argc, &argv);
   MPI_Comm_rank (MPI_COMM_WORLD, &globalId);
-  MPI_Comm_size (MPI_COMM_WORLD, &noProcesses);
+  MPI_Comm_size (MPI_COMM_WORLD, &globalNo);
 
   assert (MPI_Comm_dup(MPI_COMM_WORLD, &comm) == 0 );
   processId = globalId;
-  globalNo = noProcesses;
+  noProcesses = globalNo;
   size = N*noProcesses; //sloppy
-  //assert(MPI_Comm_split(MPI_COMM_WORLD,1,globalId,&comm) == 0);
-
   
   if (argc != 2) {
     printf("please enter a loop count, l\n");
@@ -45,60 +44,68 @@ int main (int argc, char **argv) {
   reps = atoi(argv[1]);
 
   logp=-1;
-  for (l=0;l<reps;l++)
-    if (1<<l==noProcesses)
+  for (l=1;l<=reps;l++) {
+    if (1<<l==noProcesses){
       logp=l;
-
-    if (logp<0) {
+      break;
+    }
+  }
+  if (logp<0) {
     printf("-np needs to be a power of two and larger than 2^l\n");
     exit(1);
   }
 
-  /* f = fopen("data.bin", "r"); */
-  /* if(f == NULL) */
-  /*  { */
-  /*     printf("Error opening file");    */
-  /*     exit(1);              */
-  /*  } */
+  // if you want to actualy use data from a binary file, here is a
+  // function that will read the data. Or, you can use random data
+  // with the other function bellow.
+  if (0) {
+    f = fopen("data.bin", "r");
+    if(f == NULL) {
+      printf("Error opening file");
+      exit(1);
+    }
+    assert(read_data(f,&x) == 0);
+  }
+  else
+    rand_data(&x);
 
-  /* assert(read_data(f,&x) == 0); */
-  //rand function for testing bellow
-  rand_data(&x);
+  
   dataprint(x.data,N);
 
   if (globalId==0)
     tree_init(&tree,reps);
   
   for (l=0;l<logp;l++) {
-    //printf("id:%d comm:%d np:%d size:%d l:%d logp:%d\n",processId,comm,noProcesses,size,reps,logp);
-  
     set_vp(&x,&vp);
     //pointprint(vp.data);
     find_dists(&x, &vp, &dist);
     median = find_median(dist,x.data);
+    //printf("id:%d comm:%d np:%d size:%d l:%d logp:%d, median:%f\n",processId,comm,noProcesses,size,reps,logp,median);
     points_exchange(&vp,&x,dist,median);
     tree_grow(&vp, median, l, 0, tree);
+    //dataprint(x.data,N);
+
     free(dist);
     free(vp.data);
     comm_split();
-    //printf("\ntest\n");
-    //dataprint(x.data,N);
   }
 
-  int sl;
-  
-  sl=0;
+  int sl=0; 
+  //continiue from where we left off
   while(l<reps) {
     int parts = 1<<sl;
     for (int i=0;i<parts;i++) {
       struct points x_part;
       x_part.data = x.data+i*size;
+      
       //dataprint(x_part.data,size);
       set_vp(&x_part,&vp);
+      //pointprint(vp.data);
       find_dists(&x_part,&vp,&dist);
       median = find_median(dist,x_part.data);
       //printf("id:%d size:%d, l:%d rep:%dof%d   and the median is:%f\n",globalId,size,l,i+1,parts,median);
       tree_grow(&vp, median, l, i, tree);
+      
       free(vp.data);
       free(dist);
     }
@@ -108,9 +115,9 @@ int main (int argc, char **argv) {
     l++;
   }
 
-  
-
-  if (globalId ==0) {
+  //Print a representation of the tree. Set printTree=1 to print
+  int printTree = 1;
+  if (globalId ==0 && printTree) {
     printf("=====The tree====\n");
     for (int i=0;i<(1<<reps)-1;i++) {
       printf("%d: ",i);
