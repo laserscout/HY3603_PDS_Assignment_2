@@ -161,27 +161,23 @@ int find_dists(struct points *x, struct  a_point *vp, float **dist) {
 }
 
 float find_median(float *dist,intype **data) {
-  float median, *dist_copy;
-
-  dist_copy = (float *)malloc(N*sizeof(float));
-  if (dist_copy==NULL) {
-    printf("Couldn't allocate memory for the distance vector");
-    exit(1);
-  }
-  for (int i = 0;i<N;i++)
-    dist_copy[i]=dist[i];
+  float median;
 
   if (processId==0) {
     if (noProcesses==1){
       median=selection(dist,data,size);
+      validationST(median, size, dist);
       return median;
     }
     else {
-      median=masterPart(noProcesses,processId,size,N,dist_copy,data,comm);
+      median=masterPart(noProcesses,processId,size,N,dist,data,comm);
+      validation(median, N, size,dist, processId, comm);
     }
   }
-  else
-    slavePart(processId,N,dist_copy,size,data,comm);
+  else {
+    slavePart(processId,N,dist,size,data,comm);
+    validation(median, N, size,dist, processId, comm);
+  }
 
   MPI_Bcast(&median,1,MPI_FLOAT,0,comm);
 
@@ -189,7 +185,7 @@ float find_median(float *dist,intype **data) {
 }
 
  int points_exchange(struct a_point *vp, struct  points *x, float *dist, float median) {
-   int count=0;
+   int check;
    int noSwaps=0;
    int SRtable[noProcesses];
    int sw[N]; // indexes of elements to swap
@@ -201,20 +197,19 @@ float find_median(float *dist,intype **data) {
    MPI_Status *status;
    MPI_Request *q;
 
-   for (int p=0;p<noProcesses;p++){
-     if (p==processId) {
-       for (int i=0;i<N;i++) {
-   	 printf("%d:dist[%d]=%f",processId,i,dist[i]);
-   	 if (p<hp && dist[i]>median)
-   	   printf("<-");
-   	 if (p>=hp && dist[i]<=median)
-   	   printf("<-");
-   	 printf("\n");
-       }
-     }
-     MPI_Barrier(MPI_COMM_WORLD);
-   }
-
+   /* for (int p=0;p<noProcesses;p++){ */
+   /*   if (p==processId) { */
+   /*     for (int i=0;i<N;i++) { */
+   /* 	 printf("%d:dist[%d]=%f",processId,i,dist[i]); */
+   /* 	 if (p<hp && dist[i]>median) */
+   /* 	   printf("<-"); */
+   /* 	 if (p>=hp && dist[i]<=median) */
+   /* 	   printf("<-"); */
+   /* 	 printf("\n"); */
+   /*     } */
+   /*   } */
+   /*   MPI_Barrier(MPI_COMM_WORLD); */
+   /* } */
    if (processId<hp) {
      for (int n=0;n<N;n++) {
        if (dist[n]>median) {
@@ -231,7 +226,7 @@ float find_median(float *dist,intype **data) {
        }
      }
    }
-
+   
    /* for (int p=0;p<noProcesses;p++){ */
    /*   if (p==processId) { */
    /*     printf("%d:sw = ",processId); */
@@ -242,6 +237,30 @@ float find_median(float *dist,intype **data) {
    /*   MPI_Barrier(MPI_COMM_WORLD); */
    /* } */
 
+   MPI_Allgather(&noSwaps,1,MPI_INT,SRtable,1,MPI_INT,comm);
+
+   /* for (int p=0;p<noProcesses;p++){ */
+   /*   if (p==processId) { */
+   /*     printf("%d:",processId); */
+   /*        for (int i=0;i<noProcesses;i++) */
+   /* 	    printf("%d ",SRtable[i]); */
+   /* 	  printf("\n"); */
+   /*   } */
+   /*   MPI_Barrier(MPI_COMM_WORLD); */
+   /* } */
+
+   if (processId==0){
+     check=0;
+     for (int i=0;i<hp;i++)
+       check+=SRtable[i];
+     for (int i=hp;i<noProcesses;i++)
+       check-=SRtable[i];
+     if (check!=0) {
+       printf("Send and recive halves are not equal");
+       exit(1);
+     }
+   }
+   
    if (noSwaps==0) return 0;
 
    length = noSwaps * sizeof(intype *) + noSwaps * D * sizeof(intype);
@@ -267,18 +286,6 @@ float find_median(float *dist,intype **data) {
      exit(1);
    }
 
-   MPI_Allgather(&noSwaps,1,MPI_INT,SRtable,1,MPI_INT,comm);
-
-   /* for (int p=0;p<noProcesses;p++){ */
-   /*   if (p==processId) { */
-   /*     printf("%d:",processId); */
-   /*        for (int i=0;i<noProcesses;i++) */
-   /* 	    printf("%d ",SRtable[i]); */
-   /* 	  printf("\n"); */
-   /*   } */
-   /*   MPI_Barrier(MPI_COMM_WORLD); */
-   /* } */
-   
    if (processId<hp){
      send_start = hp ;
      send_finish = noProcesses;

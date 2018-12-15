@@ -36,6 +36,7 @@
 #include <sys/time.h>
 #include <assert.h>
 #include "findMedian.h"
+#include "vp_helper.h"
 
 MPI_Status Stat;
 void partition(float *array, int elements, float pivot, float **arraysmall, float **arraybig, int *endsmall, int *endbig, double **data);
@@ -503,4 +504,66 @@ float selection(float *array,double **data,int number)
         }
     }
   return median;
+}
+void validation(float median,int partLength,int size,float *numberPart,int processId,MPI_Comm comm)
+{
+    MPI_Bcast(&median,1,MPI_FLOAT,0,comm);
+    int countMin=0;
+    int countMax=0;
+    int countEq=0;
+    int sumMax,sumMin,sumEq,i;
+    for(i=0;i<partLength;i++)
+    {
+      if(numberPart[i]>median)
+            countMax++;
+        else if(numberPart[i]<median)
+            countMin++;
+        else
+            countEq++;
+    }
+    MPI_Reduce(&countMax,&sumMax,1,MPI_INT,MPI_SUM,0,comm);
+    MPI_Reduce(&countMin,&sumMin,1,MPI_INT,MPI_SUM,0,comm);
+    MPI_Reduce(&countEq,&sumEq,1,MPI_INT,MPI_SUM,0,comm);
+    if(processId==0)
+    {
+      if((sumMax<=size/2)&&(sumMin<=size/2)) {
+	/* printf("%d:VALIDATION PASSED!\n",globalId); */
+      }
+      else {
+	   printf("VALIDATION FAILED!\n");
+	   exit(1);
+      }
+	//printf("Values greater than median: %d\n",sumMax);
+        //printf("Values equal to median: %d\n",sumEq);
+        //printf("Values lower than median: %d\n",sumMin);
+	/* printf("The median: %f\n",median); */
+    }
+
+}
+
+void validationST(float median, int size, float *numberPart)
+{
+    int countMin=0;
+    int countMax=0;
+    int countEq=0;
+    int i;
+    for(i=0;i<size;i++)
+    {
+        if(numberPart[i]>median)
+            countMax++;
+        else if(numberPart[i]<median)
+            countMin++;
+        else
+            countEq++;
+    }
+    if((countMax<=size/2)&&(countMin<=size/2)){  
+      /* printf("%d:VALIDATION PASSED!\n",globalId); */
+    }
+    else {
+        printf("VALIDATION FAILED!\n");
+	exit(1);
+    }
+/* 	printf("Values greater than median: %d\n",countMax); */
+/*         printf("Values equal to median: %d\n",countEq); */
+/*         printf("Values lower than median: %d\n",countMin); */
 }
