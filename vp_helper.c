@@ -8,7 +8,7 @@
 #include "findMedian.h"
 
 int read_data(FILE *bin, struct points *x) {
-  intype **input_data;
+  intype **input_data, *ptr;
   int length;
 
   length = N * sizeof(intype *) + N * D * sizeof(intype);
@@ -17,6 +17,11 @@ int read_data(FILE *bin, struct points *x) {
     printf ("Could not allocate %d bytes for points struct creation", length);
     exit(1);
   }
+
+  ptr =(intype *)input_data + N;
+  for(int i=0;i<N;i++)
+    input_data[i] = ptr + i*D;
+  //https://www.geeksforgeeks.org/dynamically-allocate-2d-array-c/
 
   for(int i=0; i<N; i++) {
     fread(input_data[i], D * sizeof(intype), 1, bin);
@@ -87,10 +92,6 @@ int set_vp(struct points *x, struct a_point *vp) {
 
     srand( (unsigned)time(&t) );
     index = rand() % size; // a number from 0 to size
-    if (index>size) {
-      printf("Error,rand generated an index larger than the data size/n %d/n",index);
-      exit(1);
-    }
 
     if (noProcesses==1) { //I'm on my own, do not broadcast
       for (int n=0; n<D; n++)
@@ -184,7 +185,7 @@ float find_median(float *dist,intype **data) {
   return median;
 }
 
- int points_exchange(struct a_point *vp, struct  points *x, float *dist, float median) {
+ int points_exchange(struct  points *x, float *dist, float median) {
    int check;
    int noSwaps=0;
    int SRtable[noProcesses];

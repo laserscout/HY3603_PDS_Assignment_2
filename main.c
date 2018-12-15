@@ -26,17 +26,8 @@ int main (int argc, char **argv) {
 
   D = 3;
   N = 16;
-  
   init_size=N;
-  MPI_Init (&argc, &argv);
-  MPI_Comm_rank (MPI_COMM_WORLD, &globalId);
-  MPI_Comm_size (MPI_COMM_WORLD, &globalNo);
 
-  assert (MPI_Comm_dup(MPI_COMM_WORLD, &comm) == 0 );
-  processId = globalId;
-  noProcesses = globalNo;
-  size = N*noProcesses; //sloppy
-  
   if (argc != 2) {
     printf("please enter a loop count, l\n");
     exit(1);
@@ -55,6 +46,15 @@ int main (int argc, char **argv) {
     exit(1);
   }
 
+  MPI_Init (&argc, &argv);
+  MPI_Comm_rank (MPI_COMM_WORLD, &globalId);
+  MPI_Comm_size (MPI_COMM_WORLD, &globalNo);
+
+  assert (MPI_Comm_dup(MPI_COMM_WORLD, &comm) == 0 );
+  processId = globalId;
+  noProcesses = globalNo;
+  size = N*noProcesses; //sloppy
+  
   // if you want to actualy use data from a binary file, here is a
   // function that will read the data. Or, you can use random data
   // with the other function bellow.
