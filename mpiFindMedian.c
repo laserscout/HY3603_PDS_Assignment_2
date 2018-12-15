@@ -36,6 +36,7 @@ SOFTWARE.
 #include <sys/time.h>
 #include <assert.h>
 #include "mpiFindMedian.h"
+#include "vp_helper.h"
 
 MPI_Status Stat;
 void partition (float *array, int elements, float pivot, float **arraysmall, float **arraybig, int *endsmall, int *endbig);
@@ -124,15 +125,16 @@ void validation(float median,int partLength,int size,float *numberPart,int proce
     MPI_Reduce(&countEq,&sumEq,1,MPI_INT,MPI_SUM,0,comm);
     if(processId==0)
     {
-        if((sumMax<=size/2)&&(sumMin<=size/2))  //Checks if both the lower and higher values occupy less than 50% of the total array.
-            printf("VALIDATION PASSED!\n");
-        else
-            printf("VALIDATION FAILED!\n");
+      if((sumMax<=size/2)&&(sumMin<=size/2)) {  //Checks if both the lower and higher values occupy less than 50% of the total array.
+	  //printf("VALIDATION PASSED!\n");
+      }
+	  else
+	   printf("VALIDATION FAILED!\n");
 
 
-	printf("Values greater than median: %d\n",sumMax);
-        printf("Values equal to median: %d\n",sumEq);
-        printf("Values lower than median: %d\n",sumMin);
+	//printf("Values greater than median: %d\n",sumMax);
+        //printf("Values equal to median: %d\n",sumEq);
+        //printf("Values lower than median: %d\n",sumMin);
 	/* printf("The median: %f\n",median); */
     }
 
@@ -154,15 +156,16 @@ void validationST(float median, int size, float *numberPart)
         else
             countEq++;
     }
-    if((countMax<=size/2)&&(countMin<=size/2))  //Checks if both the lower and higher values occupy
+    if((countMax<=size/2)&&(countMin<=size/2)){  //Checks if both the lower and higher values occupy
 						//less than 50% of the total array.
-        printf("VALIDATION PASSED!\n");
+      //printf("%d:VALIDATION PASSED!\n",globalId);
+    }
     else
         printf("VALIDATION FAILED!\n");
 
-	printf("Values greater than median: %d\n",countMax);
-        printf("Values equal to median: %d\n",countEq);
-        printf("Values lower than median: %d\n",countMin);
+/* 	printf("Values greater than median: %d\n",countMax); */
+/*         printf("Values equal to median: %d\n",countEq); */
+/*         printf("Values lower than median: %d\n",countMin); */
 }
 
 /****Part executed only by the Master Node****/
@@ -238,7 +241,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
                 }
                 lapsed.tv_usec = second.tv_usec - first.tv_usec;
                 lapsed.tv_sec = second.tv_sec - first.tv_sec;
-                printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
+                //printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
                 validation(median,partLength,size,numberPart,processId,comm);
                 //MPI_Finalize();
                 free(pivotArray);
@@ -378,7 +381,7 @@ float masterPart(int noProcesses,int processId,int size,int partLength,float *nu
             }
             lapsed.tv_usec = second.tv_usec - first.tv_usec;
             lapsed.tv_sec = second.tv_sec - first.tv_sec;
-            printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
+            //printf("Time elapsed: %lu, %lu s\n", lapsed.tv_sec, lapsed.tv_usec);
 	    validation(median,partLength,size,numberPart,processId,comm);
             //MPI_Finalize();
             free(pivotArray);

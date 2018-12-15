@@ -6,6 +6,7 @@
 #include <time.h>
 #include "vp_helper.h"
 #include "mpiFindMedian.h"
+#include "findMedian.h"
 
 
 //extern MPI_Comm comm;
@@ -95,6 +96,13 @@ int set_vp(struct points *x, struct a_point *vp) {
       printf("Error,rand generated an index larger than the data size/n %d/n",index);
       exit(1);
     }
+
+    if (noProcesses==1) { //I'm on my own, do not broadcast
+      for (int n=0; n<D; n++)
+	vp->data[n] = x->data[index][n];
+      return 0;
+    }
+    
     rounds = size / noProcesses;
     odds = size % noProcesses;
 
@@ -158,7 +166,7 @@ int find_dists(struct points *x, struct  a_point *vp, float **dist) {
   return 0;
 }
 
-float find_median(float *dist) {
+float find_median(float *dist,intype **data) {
   float median, *dist_copy;
 
   dist_copy = (float *)malloc(N*sizeof(float));
@@ -181,12 +189,13 @@ float find_median(float *dist) {
   
   if (processId==0) {
     if (noProcesses==1){
-      median=selection(dist_copy,size);
+      median=selection2(dist,data,size);
       validationST(median,size,dist);
+      return median;
     }
     else {
       median=masterPart(noProcesses,processId,size,N,dist_copy,comm);
-      printf("median=%f\n",median);
+      //printf("median=%f\n",median);
     }
   }
   else
@@ -219,19 +228,19 @@ float find_median(float *dist) {
    MPI_Status *status;
    MPI_Request *q;
 
-   for (int p=0;p<noProcesses;p++){
-     if (p==processId) {
-       for (int i=0;i<N;i++) {
-	 printf("%d:dist[%d]=%f",processId,i,dist[i]);
-	 if (p<hp && dist[i]>median)
-	   printf("<-");
-	 if (p>=hp && dist[i]<=median)
-	   printf("<-");
-	 printf("\n");
-       }
-     }
-     MPI_Barrier(MPI_COMM_WORLD);
-   }
+   /* for (int p=0;p<noProcesses;p++){ */
+   /*   if (p==processId) { */
+   /*     for (int i=0;i<N;i++) { */
+   /* 	 printf("%d:dist[%d]=%f",processId,i,dist[i]); */
+   /* 	 if (p<hp && dist[i]>median) */
+   /* 	   printf("<-"); */
+   /* 	 if (p>=hp && dist[i]<=median) */
+   /* 	   printf("<-"); */
+   /* 	 printf("\n"); */
+   /*     } */
+   /*   } */
+   /*   MPI_Barrier(MPI_COMM_WORLD); */
+   /* } */
 
    //points toswap;
 
@@ -263,15 +272,15 @@ float find_median(float *dist) {
      }
    }
 
-   for (int p=0;p<noProcesses;p++){
-     if (p==processId) {
-       printf("%d:sw = ",processId);
-       for (int i=0;i<noSwaps;i++)
-	 printf("%d ",sw[i]);
-       printf("\n");
-     }
-     MPI_Barrier(MPI_COMM_WORLD);
-   }
+   /* for (int p=0;p<noProcesses;p++){ */
+   /*   if (p==processId) { */
+   /*     printf("%d:sw = ",processId); */
+   /*     for (int i=0;i<noSwaps;i++) */
+   /* 	 printf("%d ",sw[i]); */
+   /*     printf("\n"); */
+   /*   } */
+   /*   MPI_Barrier(MPI_COMM_WORLD); */
+   /* } */
 
    if (noSwaps==0) return 0;
 
@@ -303,15 +312,15 @@ float find_median(float *dist) {
    //procceses 0 - np/2-1 keep the smaller elements and np/2 - np the larger
    MPI_Allgather(&noSwaps,1,MPI_INT,SRtable,1,MPI_INT,comm);
 
-   for (int p=0;p<noProcesses;p++){
-     if (p==processId) {
-       printf("%d:",processId);
-          for (int i=0;i<noProcesses;i++)
-	    printf("%d ",SRtable[i]);
-	  printf("\n");
-     }
-     MPI_Barrier(MPI_COMM_WORLD);
-   }
+   /* for (int p=0;p<noProcesses;p++){ */
+   /*   if (p==processId) { */
+   /*     printf("%d:",processId); */
+   /*        for (int i=0;i<noProcesses;i++) */
+   /* 	    printf("%d ",SRtable[i]); */
+   /* 	  printf("\n"); */
+   /*   } */
+   /*   MPI_Barrier(MPI_COMM_WORLD); */
+   /* } */
    
    if (processId<hp){
      send_start = hp ;
@@ -330,44 +339,88 @@ float find_median(float *dist) {
      
    for (int p=send_start;p<send_finish;p++) {
      priority-=SRtable[p];
-     printf("%d:priority=%d\n",processId,priority);
+     //printf("%d:priority=%d\n",processId,priority);
      while (priority<0 && countS<noSwaps) {
        MPI_Isend(swap_data[countS],D,MPI_DOUBLE,p,swapid,comm,q+countS);
        MPI_Irecv(x->data[sw[countS]],D,MPI_DOUBLE,p,swapid,comm,q+noSwaps+countS);
        priority++;
        swapid++;
        countS++;
-       printf("%d:swap! %d of %d\n",processId,countS,noSwaps);
+       //printf("%d:swap! %d of %d\n",processId,countS,noSwaps);
      }
      if(countS>=noSwaps){
-       printf("%d:break",processId);
+       //printf("%d:break",processId);
        break; // just to make sure it breaks, it's out of the while loop
      }
    }
-   printf("%d: Before Wait_all\n",processId);
+   //printf("%d: Before Wait_all\n",processId);
    assert (MPI_Waitall(noSwaps*2,q,status) == 0);
-   printf("%d: I'm here\n",processId);
+   //printf("%d: I'm here\n",processId);
    free(q);
    free(status);
    free(swap_data);
   return 0;
 }
 
-struct vp_tree * newvp(struct a_point *center, float radius, int depth){
-  struct vp_tree *node = (struct vp_tree *)malloc(sizeof(struct vp_tree));
-  node->center = *center;
-  node->radius = radius;
-  node->bigger = NULL;
-  node->smaller = NULL;
-  node->depth = depth;
-  //struct vp_tree *root;
-  //int MPI_process_id_kati;
-}
+int tree_init(struct vp_tree **t, int depth){
 
-int tree_grow(struct vp_tree *root, struct a_point *center, float radius, int depth) {
-  if (processId==0) {
-    root->smaller = newvp(center, radius, depth);
+  intype *c;
+  int length;
+  
+  length = (1<<depth) - 1;
+  *t = (struct vp_tree *)malloc(length*sizeof(struct vp_tree));
+  if (*t == NULL) {
+    printf("%d:Cound not allocate memory for the tree\n",globalId);
+    exit(1);
   }
+
+  c=(intype *)malloc(D*length*sizeof(intype));
+  if (c==NULL) {
+    printf("%d:Cound not allocate memory for the tree centers\n",globalId);
+    exit(1);
+  }
+  for (int i=0;i<length;i++)
+    (*t)[i].center = c+i*D;
+
+  return 0;
+}
+	  
+int tree_grow(struct a_point *center, float radius, int depth, int rep, struct vp_tree *t){
+  int idx;
+  float r;
+  intype c[D];
+  MPI_Status stat;
+
+  idx = (1<<depth)-1+rep*globalNo;
+  if (globalId == 0) {
+    //printf("depth:%d idx:%d\n",depth,idx);
+    t[idx].radius = radius;
+    t[idx].depth = depth;
+    for (int d=0;d<D;d++)
+      t[idx].center[d] = center->data[d];
+
+    int others=globalNo/noProcesses;
+    //printf("others:%d\n",others);
+
+    for (int i=1; i<others;i++) {
+      int p = i*noProcesses;
+      MPI_Recv(c,D,MPI_DOUBLE,p,1,MPI_COMM_WORLD,&stat);
+      MPI_Recv(&r,1,MPI_FLOAT,p,2,MPI_COMM_WORLD,&stat);
+      //printf("recived depth:%d idx:%d\n",depth,idx+i);
+      t[idx+i].radius = r;
+      t[idx+i].depth = depth;
+      for (int d=0;d<D;d++)
+	t[idx+i].center[d] = c[d];
+    }
+  }
+  else if (processId==0) {
+    //printf("sending... depth:%d idx:%d\n",depth,idx+globalId);
+    MPI_Send(center->data,D,MPI_DOUBLE,0,1,MPI_COMM_WORLD);
+    MPI_Send(&radius,1,MPI_FLOAT,0,2,MPI_COMM_WORLD);
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
   return 0;
 }
 

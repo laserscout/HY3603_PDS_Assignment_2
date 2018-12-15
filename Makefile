@@ -1,5 +1,5 @@
 
-OBJ = mpiFindMedian.o vp_helper.o main.o
+OBJ = mpiFindMedian.o findMedian.o vp_helper.o main.o
 TARGET = vpexec
 
 all: $(OBJ)

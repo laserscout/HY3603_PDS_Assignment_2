@@ -16,14 +16,17 @@ int N;
 
 int main (int argc, char **argv) {
   int reps,logp,l;
+  int init_size;
   FILE *f;
   struct points x;
   struct a_point vp;
+  struct vp_tree *tree;
   float *dist;
   float median;
 
-  D = 1;
-  N = 8;
+  D = 3;
+  N = 16;
+  init_size=N;
   MPI_Init (&argc, &argv);
   MPI_Comm_rank (MPI_COMM_WORLD, &globalId);
   MPI_Comm_size (MPI_COMM_WORLD, &noProcesses);
@@ -61,29 +64,63 @@ int main (int argc, char **argv) {
   /* assert(read_data(f,&x) == 0); */
   //rand function for testing bellow
   rand_data(&x);
-
   dataprint(x.data,N);
-    
+
+  if (globalId==0)
+    tree_init(&tree,reps);
+  
   for (l=0;l<logp;l++) {
-    printf("id:%d comm:%d np:%d size:%d l:%d logp:%d\n",processId,comm,noProcesses,size,reps,logp);
+    //printf("id:%d comm:%d np:%d size:%d l:%d logp:%d\n",processId,comm,noProcesses,size,reps,logp);
   
     set_vp(&x,&vp);
     //pointprint(vp.data);
     find_dists(&x, &vp, &dist);
-    median = find_median(dist);
+    median = find_median(dist,x.data);
     points_exchange(&vp,&x,dist,median);
-    //tree_grow(&vp, median, l);
-    //free(dist);
-    //free(vp.data);
+    tree_grow(&vp, median, l, 0, tree);
+    free(dist);
+    free(vp.data);
     comm_split();
-    printf("\ntest\n");
-    dataprint(x.data,N);
+    //printf("\ntest\n");
+    //dataprint(x.data,N);
   }
 
+  int sl;
+  
+  sl=0;
   while(l<reps) {
-    
+    int parts = 1<<sl;
+    for (int i=0;i<parts;i++) {
+      struct points x_part;
+      x_part.data = x.data+i*size;
+      //dataprint(x_part.data,size);
+      set_vp(&x_part,&vp);
+      find_dists(&x_part,&vp,&dist);
+      median = find_median(dist,x_part.data);
+      //printf("id:%d size:%d, l:%d rep:%dof%d   and the median is:%f\n",globalId,size,l,i+1,parts,median);
+      tree_grow(&vp, median, l, i, tree);
+      free(vp.data);
+      free(dist);
+    }
+    size = size/2;
+    N = N/2;
+    sl++;
     l++;
   }
+
+  
+
+  if (globalId ==0) {
+    printf("=====The tree====\n");
+    for (int i=0;i<(1<<reps)-1;i++) {
+      printf("%d: ",i);
+      for (int d=0;d<D;d++)
+	printf("%f ",tree[i].center[d]);
+      printf("R:%f, depth:%d\n",tree[i].radius,tree[i].depth);
+    }
+  }
+
+  dataprint(x.data,init_size);
 
   MPI_Finalize();
   
