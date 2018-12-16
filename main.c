@@ -11,8 +11,8 @@ int globalId;
 int noProcesses;
 int globalNo;
 int size;
-int D;
 int N;
+int D;
 
 int main (int argc, char **argv) {
   int reps,logp,l;
